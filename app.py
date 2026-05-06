@@ -145,7 +145,8 @@ def fetch_verified_images(query: str, destination: str, used_urls: set, max_imag
     # Negative keywords to avoid drawings, flyers, text-heavy content, and watermarked stock photos
     negative_keywords = [
         "drawing", "vector", "flyer", "poster", "text", "infographic", "advertisement", "diagram",
-        "alamy", "stock", "shutterstock", "dreamstime", "123rf", "istockphoto", "watermark", "bus crash"
+        "alamy", "stock", "shutterstock", "dreamstime", "123rf", "istockphoto", "watermark", "bus crash",
+        "sketch", "clipart", "illustration", "cartoon", "painting", "anime", "map", "blueprint"
     ]
     for i in range(len(queries)):
         queries[i] += " " + " ".join([f"-{kw}" for kw in negative_keywords])
@@ -426,7 +427,7 @@ def build_day_images(day_places: list[str], destination: str, used_urls: set) ->
                 images_with_names.append({"path": fallback, "name": place})
     
     # Fill remaining slots with destination fallback
-    while len(images_with_names) < 4:
+    while len(images_with_names) < 3:
         fallback = get_fallback_image(destination, used_urls)
         if fallback:
             images_with_names.append({"path": fallback, "name": destination})
@@ -843,23 +844,23 @@ def create_pdf(itinerary: dict, day_images: dict) -> bytes:
             
         pdf.ln(5)
         
-        # Image Grid (4-image Mosaic)
+        # Image Grid (3-image Mosaic)
         images = day_images.get(i, [])
-        if images and len(images) >= 4:
+        if images and len(images) >= 3:
             content_x = 35
             y_img_start = pdf.get_y()
             grid_w = 160
             img_large_w = 100
             img_large_h = 70
             gap = 2
-            img_sm_w = (grid_w - img_large_w - 2 * gap) / 2
-            img_sm_h = (img_large_h - gap) / 2
+            
+            img_small_w = (grid_w - img_large_w - gap)
+            img_small_h = (img_large_h - gap) / 2
             
             try:
                 pdf.image(images[0]["path"], x=content_x, y=y_img_start, w=img_large_w, h=img_large_h)
-                pdf.image(images[1]["path"], x=content_x + img_large_w + gap, y=y_img_start, w=img_sm_w, h=img_sm_h)
-                pdf.image(images[2]["path"], x=content_x + img_large_w + gap, y=y_img_start + img_sm_h + gap, w=img_sm_w, h=img_sm_h)
-                pdf.image(images[3]["path"], x=content_x + img_large_w + img_sm_w + 2 * gap, y=y_img_start, w=img_sm_w, h=img_large_h)
+                pdf.image(images[1]["path"], x=content_x + img_large_w + gap, y=y_img_start, w=img_small_w, h=img_small_h)
+                pdf.image(images[2]["path"], x=content_x + img_large_w + gap, y=y_img_start + img_small_h + gap, w=img_small_w, h=img_small_h)
             except: pass
             
             pdf.set_y(y_img_start + img_large_h + 10)
