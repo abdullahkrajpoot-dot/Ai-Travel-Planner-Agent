@@ -136,16 +136,19 @@ def fetch_verified_images(query: str, destination: str, used_urls: set, max_imag
     
     # Try multiple query variations for higher accuracy and realism
     queries = [
-        f"{query} {destination} high quality photography",
-        f"{query} {destination} landmark real photo",
-        f"{query} {destination} tourist view 4k",
-        f"{query} professional architecture photography"
+        f"{query} {destination} landscape photography",
+        f"{query} {destination} landmark view",
+        f"{query} {destination} tourism 4k",
+        f"{query} architectural photography"
     ]
     
-    # Negative keywords to avoid drawings/clipart
-    negative_keywords = ["drawing", "vector", "illustration", "clipart", "sketch", "coloring page"]
+    # Negative keywords to avoid drawings, flyers, text-heavy content, and watermarked stock photos
+    negative_keywords = [
+        "drawing", "vector", "flyer", "poster", "text", "infographic", "advertisement", "diagram",
+        "alamy", "stock", "shutterstock", "dreamstime", "123rf", "istockphoto", "watermark", "bus crash"
+    ]
     for i in range(len(queries)):
-        queries[i] += " -drawing -vector -clipart -illustration"
+        queries[i] += " " + " ".join([f"-{kw}" for kw in negative_keywords])
     
     for q in queries:
         if len(image_paths) >= max_images:
@@ -459,7 +462,7 @@ def generate_itinerary(customer: str, destination: str, start_date: date, end_da
             pass
     
     # Fallback to template generation
-    return generate_template_itinerary(destination, days)
+    return generate_template_itinerary(customer, destination, days)
 
 
 def generate_ai_itinerary(customer: str, destination: str, days: list[date], api_key: str) -> dict | None:
@@ -546,14 +549,70 @@ Return ONLY valid JSON."""
         return None
 
 
-def generate_template_itinerary(destination: str, days: list[date]) -> dict:
+def generate_template_itinerary(customer: str, destination: str, days: list[date]) -> dict:
     """Generate template-based itinerary when AI fails."""
     itinerary_days = []
     
     dest_lower = destination.lower()
-    if "pakistan" in dest_lower:
-        # Group landmarks by city for realism
-        city_groups = [
+    
+    # Pakistan City-Specific Landmark Database
+    pakistan_cities = {
+        "lahore": [
+            "Badshahi Mosque Lahore", "Lahore Fort", "Minar-e-Pakistan", "Shalamar Gardens Lahore",
+            "Wazir Khan Mosque Lahore", "Anarkali Bazaar", "Wagah Border Ceremony", "Delhi Gate Lahore",
+            "Lahore Museum", "Jallo Park", "Greater Iqbal Park", "Liberty Market Lahore",
+            "Data Darbar", "Chauburji Lahore", "Shahi Hammam", "Lawrence Gardens",
+            "Tomb of Jahangir", "Gulshan-e-Iqbal Park", "Model Town Park", "Lahore Zoo",
+            "Food Street Fort Road", "Packages Mall Lahore", "Emporium Mall", "Race Course Park"
+        ],
+        "karachi": [
+            "Mohatta Palace Karachi", "Mazar-e-Quaid Karachi", "Clifton Beach Karachi", "Pakistan Maritime Museum",
+            "Frere Hall Karachi", "PAF Museum Karachi", "Dolmen Mall Clifton", "Port Grand Karachi",
+            "Chaukhandi Tombs", "Turtle Beach Karachi", "Empress Market", "DHA Golf Club Karachi",
+            "National Museum of Pakistan", "Hill Park Karachi", "Bin Qasim Park", "St. Patrick's Cathedral",
+            "Do Darya Karachi", "Dreamworld Resort", "Lucky One Mall", "Manora Island"
+        ],
+        "islamabad": [
+            "Faisal Mosque Islamabad", "Daman-e-Koh Islamabad", "Lok Virsa Museum", "Pakistan Monument",
+            "Rawal Lake Islamabad", "Centaurus Mall", "Margalla Hills National Park", "Saidpur Village",
+            "Shakarparian Park", "Rose and Jasmine Garden", "National Art Gallery Islamabad", "The Monal",
+            "Lake View Park", "Fatima Jinnah Park", "Safari Park Islamabad", "Giga Mall",
+            "Shah Allah Ditta Caves", "Golra Sharif Railway Museum", "Islamabad Club", "Japanese Park",
+            "Safa Gold Mall", "F-6 Markaz", "F-7 Flower Market", "National Museum of Natural History",
+            "Blue Area Islamabad", "Supreme Court Building", "Parliament House Islamabad", "Rawal Dam",
+            "Simly Dam", "King Faisal Mosque Exterior", "Margalla Road Drive", "Islamabad Zoo Ruins"
+        ],
+        "bahawalpur": [
+            "Noor Mahal Bahawalpur", "Derawar Fort", "Uch Sharif", "Abbasi Mosque",
+            "Gulzar Mahal", "Sadiq Garh Palace", "Lal Suhanra National Park", "Bahawalpur Zoo",
+            "Central Library Bahawalpur", "Darbar Mahal", "Jamia Masjid Al-Sadiq", "Farid Gate"
+        ],
+        "murree": [
+            "Mall Road Murree", "Pindi Point", "Kashmir Point", "Patriata Chair Lift",
+            "Ayubia National Park", "Nathia Gali", "Thandiani", "Mushkpuri Peak",
+            "Dunga Gali", "Pipe Line Track", "Changla Gali", "Ghora Gali"
+        ],
+        "swat": [
+            "Mingora Bazaar", "Malam Jabba", "Fizagat Park", "Marghuzar White Palace",
+            "Kalam Valley", "Mahodand Lake", "Ushu Forest", "Gabina Jabba",
+            "Madyan Swat", "Behrain Swat", "Kundol Lake", "Spin Khwar Lake"
+        ]
+    }
+    
+    # Check if a specific city is mentioned in the destination
+    matched_city = None
+    for city in pakistan_cities:
+        if city in dest_lower:
+            matched_city = city
+            break
+            
+    # Extract all relevant landmarks into a single pool
+    landmark_pool = []
+    if matched_city:
+        landmark_pool = pakistan_cities[matched_city].copy()
+    elif "pakistan" in dest_lower:
+        # Flatten all Pakistan city groups into one pool
+        for group in [
             ["Faisal Mosque Islamabad", "Daman-e-Koh Islamabad", "Lok Virsa Museum", "Pakistan Monument"],
             ["Badshahi Mosque Lahore", "Lahore Fort", "Minar-e-Pakistan", "Shalamar Gardens Lahore"],
             ["Wazir Khan Mosque Lahore", "Anarkali Bazaar", "Wagah Border Ceremony", "Delhi Gate Lahore"],
@@ -561,10 +620,10 @@ def generate_template_itinerary(destination: str, days: list[date]) -> dict:
             ["Mohatta Palace Karachi", "Mazar-e-Quaid Karachi", "Clifton Beach Karachi", "Pakistan Maritime Museum"],
             ["Lake Saif-ul-Malook", "Babusar Pass", "Lulusar Lake", "Kiwai Waterfalls"],
             ["Hunza Valley", "Baltit Fort", "Attabad Lake", "Passu Cones"]
-        ]
-        landmarks = [] # Flatten for backwards compatibility if needed, but we'll use city_groups
+        ]:
+            landmark_pool.extend(group)
     else:
-        landmarks = [
+        landmark_pool = [
             f"Main landmark of {destination}",
             f"Historic center of {destination}",
             f"Famous museum in {destination}",
@@ -573,15 +632,38 @@ def generate_template_itinerary(destination: str, days: list[date]) -> dict:
             f"Cultural district of {destination}",
             f"Old town area of {destination}",
             f"Riverside/waterfront of {destination}",
+            f"Local park in {destination}",
+            f"Shopping mall in {destination}",
+            f"Botanical garden of {destination}",
+            f"Art gallery in {destination}"
         ]
-        city_groups = [landmarks[i:i+4] for i in range(0, len(landmarks), 4)]
-    
+
     for i, day in enumerate(days):
-        # Pick a city group for this day
-        group_idx = i % len(city_groups)
-        day_places = city_groups[group_idx]
-        
-        city_name = day_places[0].split()[-1] if "pakistan" in dest_lower else destination
+        # Pick 4 unique landmarks from the pool
+        day_places = []
+        for j in range(4):
+            if landmark_pool:
+                day_places.append(landmark_pool.pop(0))
+            else:
+                # Varied fallback names to ensure unique search results without using unprofessional numbering
+                fallback_names = [
+                    "Historic District", "Central Square", "Riverside View", "Heritage Site",
+                    "Cultural Plaza", "Main Boulevard", "Green Park", "Art District",
+                    "Old Town Area", "Scenic Lookout", "Clock Tower Square", "Garden Walk",
+                    "Modern Skyview", "Waterfront Area", "Memorial Park", "Market Street",
+                    "Government Building", "University Grounds", "Botanical Corner", "Craft Center"
+                ]
+                name_idx = (i * 4 + j) % len(fallback_names)
+                day_places.append(f"{fallback_names[name_idx]} in {city_name}")
+        # Determine the city name for descriptions
+        if matched_city:
+            city_name = matched_city.title()
+        elif "pakistan" in dest_lower:
+            # For country-wide, try to infer city from the first landmark of the day
+            parts = day_places[0].split()
+            city_name = parts[-1] if len(parts) > 0 else destination
+        else:
+            city_name = destination
         
         if i == 0:
             title = f"Arrival & First Impressions of {city_name}"
@@ -596,8 +678,8 @@ def generate_template_itinerary(destination: str, days: list[date]) -> dict:
         else:
             title = f"Exploring {city_name}"
             morning = f"Start your day with a visit to the historic {day_places[0]}."
-            afternoon = f"Continue your exploration at {day_places[1]}."
-            evening = f"Evening stroll through {day_places[2]} followed by dinner."
+            afternoon = f"Continue your exploration at {day_places[1]} and local surroundings."
+            evening = f"Evening stroll through {day_places[2]} followed by dinner at a popular spot."
         
         itinerary_days.append({
             "date": day.strftime("%Y-%m-%d"),
@@ -610,7 +692,7 @@ def generate_template_itinerary(destination: str, days: list[date]) -> dict:
         })
     
     return {
-        "customer": "Valued Customer",
+        "customer": customer,
         "destination": destination,
         "days": itinerary_days,
     }
