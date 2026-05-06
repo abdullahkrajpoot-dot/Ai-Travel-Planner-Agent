@@ -3,6 +3,7 @@ AI Travel Planner - Professional PDF Generation
 Generates day-by-day travel itineraries with verified images and professional PDF layout.
 """
 
+import hashlib
 import json
 import os
 import re
@@ -13,6 +14,7 @@ from datetime import date, datetime, timedelta
 from io import BytesIO
 from pathlib import Path
 import threading
+import shutil
 
 import requests
 import streamlit as st
@@ -127,6 +129,16 @@ def bing_images_scrape(query: str, max_images: int = 5) -> list[str]:
         return []
 
 
+# Cache directory for images to speed up generation
+CACHE_DIR = Path("image_cache")
+CACHE_DIR.mkdir(exist_ok=True)
+
+def get_cache_path(query: str) -> Path:
+    """Generate a consistent cache filename from a query."""
+    clean_query = re.sub(r'[^a-zA-Z0-9]', '', query).lower()
+    query_hash = hashlib.md5(query.encode()).hexdigest()[:8]
+    return CACHE_DIR / f"{clean_query}_{query_hash}.jpg"
+
 def fetch_verified_images(query: str, destination: str, used_urls: set, max_images: int = 4) -> list[str]:
     """
     Fetch verified images by scraping Google Images directly.
@@ -151,6 +163,14 @@ def fetch_verified_images(query: str, destination: str, used_urls: set, max_imag
     for i in range(len(queries)):
         queries[i] += " " + " ".join([f"-{kw}" for kw in negative_keywords])
     
+    # Check cache first for the main query
+    cache_path = get_cache_path(query)
+    if cache_path.exists():
+        # Copy to temp file so it doesn't get deleted by the app's cleanup
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as f:
+            shutil.copy2(cache_path, f.name)
+            return [f.name]
+
     for q in queries:
         if len(image_paths) >= max_images:
             break
@@ -191,6 +211,11 @@ def fetch_verified_images(query: str, destination: str, used_urls: set, max_imag
                 img = img.convert("RGB")
                 with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as f:
                     img.save(f.name, format="JPEG", quality=90)
+                    
+                    # Cache the first high-quality image found for this query
+                    if not cache_path.exists():
+                        shutil.copy2(f.name, cache_path)
+                        
                     image_paths.append(f.name)
                     with used_urls_lock:
                         used_urls.add(image_url)
@@ -929,7 +954,7 @@ def main():
             def fetch_day_images(idx, day_data):
                 return idx, build_day_images(day_data.get("places", []), destination, used_urls)
 
-            with ThreadPoolExecutor(max_workers=min(len(days), 8)) as executor:
+            with ThreadPoolExecutor(max_workers=min(len(days), 15)) as executor:
                 futures = [executor.submit(fetch_day_images, i, day) for i, day in enumerate(days)]
                 for future in as_completed(futures):
                     idx, result = future.result()
